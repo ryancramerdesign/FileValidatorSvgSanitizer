@@ -1,26 +1,22 @@
-<?php
+<?php namespace ProcessWire;
 
 /**
- * Class FileValidatorSvgSanitizer
- *
- * Validates and/or sanitizes SVG files, for ProcessWire 2.5.25 or newer.
- *
- * Optionally override any settings in your /site/config.php file: 
- *
- * $config->FileValidatorSvgSanitizer = array(
+ * Validates and/or sanitizes SVG files in ProcessWire
  * 
- *	// override global whitelist (see whitelist.json for default)
- *	'whitelist' => array or JSON string,
+ * Uses the svg-sanitizer library: 
+ * https://github.com/darylldoyle/svg-sanitizer 
  * 
- *	// override whitelist on a per-field basis (replace "fieldname"):
- *	'whitelist_fieldname' => array or JSON string, 
+ * The FileValidatorModule interface and this module file are MIT licensed,
+ * while the svg-sanitizer library in the /svgSanitize/ dir is GPL 2.0.
+ * As a result, if your installation does not support GPL code, you should
+ * inquire with the developer of the sanitizer lib before using this module
+ * in your project: https://github.com/darylldoyle
  * 
- *	// override sanitize vs. validate on a per-field basis (replace "fieldname"):
- *	// note that default behavior is configured with module interactively
- *	'sanitize_fieldname' => true to allow sanitize, or false to disallow
- * );
+ * Originally developed by Adrian and Ryan in 2015 and updated in 2020 
+ * to change the SVG sanitizer library this module uses. 
  *
- * @property int|bool $allowSanitize
+ * @property int|bool $removeRemoteReferences
+ * @property int|bool $minify
  * @property string $whitelist JSON whitelist override
  *
  */
@@ -28,71 +24,56 @@ class FileValidatorSvgSanitizer extends FileValidatorModule {
 
 	public static function getModuleInfo() {
 		return array(
-			'title' => 'Validate SVG files',
-			'summary' => 'Validates and/or sanitizes SVG files.', 
-			'version' => 1, 
+			'title' => 'SVG File Sanitizer/Validator',
+			'summary' => 'Validates and/or sanitizes uploaded SVG files.', 
+			'version' => 2, 
 			'author' => 'Adrian and Ryan',
 			'autoload' => false, 
 			'singular' => false, 
-			'validates' => array('svg')
+			'validates' => array('svg'),
+			'requires' => 'ProcessWire>=3.0.148',
 		);
 	}
 
 	/**
-	 * Cached instance of SVGSanitizer
+	 * @var \enshrined\svgSanitize\Sanitizer
 	 *
 	 */
 	protected $svgSanitizer = null;
 
 	/**
-	 * Generate SVG Sanitizer settings object
-	 *
+	 * Construct
+	 * 
 	 */
 	public function __construct() {
-		require_once(dirname(__FILE__) . '/svgsanitizer/SvgSanitizer.php');
+		$this->set('removeRemoteReferences', 1);
+		$this->set('minify', 0);
 	}
 
 	/**
-	 * Get the SVGSanitizer instance
+	 * Module init
+	 * 
+	 */
+	public function init() {
+		$this->getSvgSanitizer();
+	}
+
+	/**
+	 * Get the SVG Sanitizer instance
 	 *
-	 * @return SVGSanitizer
+	 * @return \enshrined\svgSanitize\Sanitizer
 	 *
 	 */
 	public function getSvgSanitizer() {
-		if(is_null($this->svgSanitizer)) $this->svgSanitizer = new SvgSanitizer();
+		if($this->svgSanitizer !== null) return $this->svgSanitizer;
+		$ns = 'enshrined\svgSanitize';
+		$classLoader = $this->wire()->classLoader;
+		if(!$classLoader->hasNamespace($ns)) $classLoader->addNamespace($ns, __DIR__ . '/svgSanitize/');
+		$className = $ns . '\Sanitizer';
+		$this->svgSanitizer = new $className();
+		$this->svgSanitizer->removeRemoteReferences((bool) $this->removeRemoteReferences);
+		$this->svgSanitizer->minify((bool) $this->minify);
 		return $this->svgSanitizer;
-	}
-
-	/**
-	 * Sanitize the given dirty SVG and return the clean SVG
-	 *
-	 * @param string Dirty SVG
-	 * @param array|string|null $whitelist Optional JSON or array, or omit to use default
- 	 * @return string Clean SVG
-	 *
-	 */
-	public function svg($filename, $whitelist = null) {
-		if($whitelist && !is_array($whitelist)) {
-			// assumed to be a JSON string that needs decoding
-			$whitelist = json_decode($whitelist, true);
-		}
-		if(!$whitelist) {
-			// if no whitelist provided, or above json_decode fails, use default
-			$whitelist = $this->getDefaultWhitelist();
-		}
-		$this->getSvgSanitizer()->load($filename);
-		$this->getSvgSanitizer()->sanitize($whitelist);
-		return $this->getSvgSanitizer()->saveSVG();
-	}
-
-	/**
-	 * Return the data from the default whitelist (whitelist.json)
-	 *
-	 * @return array
-	 *
-	 */
-	public function getDefaultWhitelist() {
-		return json_decode(file_get_contents(dirname(__FILE__) . '/whitelist.json'), true);
 	}
 
 	/**
@@ -112,44 +93,76 @@ class FileValidatorSvgSanitizer extends FileValidatorModule {
 	 * 
 	 */
 	protected function isValidFile($filename) {
+		
+		$svgSanitizer = $this->getSvgSanitizer();
+		$svgDirty = file_get_contents($filename);
+		$svgClean = $svgSanitizer->sanitize($svgDirty);
+		$svgIssues = $svgSanitizer->getXmlIssues();
 
-		$whitelist = null;
-		$allowSanitize = $this->allowSanitize; 
-		$overrides = $this->wire('config')->FileValidatorSvgSanitizer;
-		$field = $this->getField();
-
-		if(is_array($overrides)) {
-			// $config->FileValidatorSvgSanitizer settings array is present
-			if($field) {
-				// this isValidFile call is working with a specific field
-				// use optional field-level overrides for whitelist and sanitize
-				$whitelist = $overrides->{"whitelist_$field->name"};
-				$allowSanitize = $overrides->{"sanitize_$field->name"};
+		if(!empty($svgIssues)) {
+			// log found issues
+			$issues = array();
+			foreach($svgIssues as $issue) {
+				$issue = "$issue[message] (line $issue[line])";
+				$issues[$issue] = $issue;
 			}
-			// optional global override for whitelist
-			if(is_null($whitelist)) $whitelist = $overrides->whitelist;
-		}	
-
-		// use value configured with module if not overridden
-		if(is_null($allowSanitize)) $allowSanitize = $this->allowSanitize; 
-
-		$changed = $this->svg($filename, $whitelist); 
-
-		if($changed) {
-			// SVG file was modified
-			if($this->allowSanitize) {
-				// sanitization is allowed: return integer 1
-				return 1;
-			} else {
-				// sanitization it not allowed, so file is invalid
-				return false;
+			if($svgClean === false) {
+				foreach($issues as $issue) $this->error($issue);
+			} else if(count($issues)) {
+				$this->log("SvgSanitizer: " . basename($filename) . ": " . implode(', ', $issues));
 			}
-		} 
+		}
+		
+		if($svgClean === false) {
+			// sanitize failed
+			return false;
+			
+		} else if($svgDirty === $svgClean) {
+			// no changes after sanitization, file is ok. this is sort of unlikely
+			// as SvgSanitizer seems to apply minor changes either way
+			return true;
+		}
 
-		// no changes necessary to file, so it is valid
-		return true; 
+		// write new sanitized svg file
+		$files = $this->wire()->files;
+		$files->unlink($filename);
+		if($files->filePutContents($filename, $svgClean) === false) return false;
+		
+		return 1;
+	}
+	
+	/**
+	 * Return the data from the default whitelist
+	 *
+	 * This method doesn’t do anything for this module, it is just here if you want to
+	 * know what are the whitelisted tags and attributes.
+	 *
+	 * @return array
+	 *
+	 */
+	public function getDefaultWhitelist() {
+		return array(
+			'tags' => \enshrined\svgSanitize\data\AllowedTags::getTags(),
+			'attributes' => \enshrined\svgSanitize\data\AllowedAttributes::getAttributes(),
+		);
 	}
 
+
+	/**
+	 * Install 
+	 * 
+	 * @throws WireException
+	 * 
+	 */
+	public function ___install() {
+		$exts = get_loaded_extensions();
+		if(!in_array('dom', $exts)) {
+			throw new WireException('This module requires the PHP “dom” extension (ext-dom)');
+		}
+		if(!in_array('libxml', $exts)) {
+			throw new WireException('This module requires the PHP “libxml” extension (ext-libxml)');
+		}
+	}
 
 }
 
