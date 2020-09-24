@@ -51,7 +51,7 @@ Because of the SVG library change, please note the following feature changes
 in version 2+ relative to version 1: 
 
 1. It does not use a `$config->FileValidatorSvgSanitizer` config array.
-2. It does not have configurable whitelists of tags, attributes or fields. 
+2. Whitelists of tags and attributes are configurable in module settings.
 3. It only rejects SVG files that cannot be made valid through sanitization.
 4. Sanitization seems to be quite a bit better than the previous. 
 5. It optionally includes the ability to minify whitespace in an SVG file.

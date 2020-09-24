@@ -17,7 +17,8 @@
  *
  * @property int|bool $removeRemoteReferences
  * @property int|bool $minify
- * @property string $whitelist JSON whitelist override
+ * @property string $customTags
+ * @property string $customAttrs
  *
  */
 class FileValidatorSvgSanitizer extends FileValidatorModule {
@@ -26,7 +27,7 @@ class FileValidatorSvgSanitizer extends FileValidatorModule {
 		return array(
 			'title' => 'SVG File Sanitizer/Validator',
 			'summary' => 'Validates and/or sanitizes uploaded SVG files.', 
-			'version' => 2, 
+			'version' => 3, 
 			'author' => 'Adrian and Ryan',
 			'autoload' => false, 
 			'singular' => false, 
@@ -48,6 +49,8 @@ class FileValidatorSvgSanitizer extends FileValidatorModule {
 	public function __construct() {
 		$this->set('removeRemoteReferences', 1);
 		$this->set('minify', 0);
+		$this->set('customTags', '');
+		$this->set('customAttrs', '');
 	}
 
 	/**
@@ -73,6 +76,18 @@ class FileValidatorSvgSanitizer extends FileValidatorModule {
 		$this->svgSanitizer = new $className();
 		$this->svgSanitizer->removeRemoteReferences((bool) $this->removeRemoteReferences);
 		$this->svgSanitizer->minify((bool) $this->minify);
+		list($tags, $attrs) = array($this->customTags, $this->customAttrs);
+		if($tags || $attrs) {
+			require_once(__DIR__ . '/FileValidatorSvgSanitizer.data.php'); 
+			if($tags) {
+				FileValidatorSvgSanitizerTags::add($tags);
+				$this->svgSanitizer->setAllowedTags(new FileValidatorSvgSanitizerTags());
+			}
+			if($attrs) {
+				FileValidatorSvgSanitizerAttributes::add($attrs);
+				$this->svgSanitizer->setAllowedAttrs(new FileValidatorSvgSanitizerAttributes());
+			}
+		}
 		return $this->svgSanitizer;
 	}
 
@@ -147,6 +162,19 @@ class FileValidatorSvgSanitizer extends FileValidatorModule {
 		);
 	}
 
+	/**
+	 * Return data from the customized whitelist
+	 * 
+	 * @return array
+	 * 
+	 */
+	public function getWhitelist() {
+		$this->getSvgSanitizer();
+		return array(
+			'tags' => FileValidatorSvgSanitizerTags::getTags(),
+			'attributes' => FileValidatorSvgSanitizerAttributes::getAttributes(),
+		);
+	}
 
 	/**
 	 * Install 
