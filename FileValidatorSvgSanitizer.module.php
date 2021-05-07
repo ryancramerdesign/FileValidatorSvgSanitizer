@@ -13,7 +13,8 @@
  * in your project: https://github.com/darylldoyle
  * 
  * Originally developed by Adrian and Ryan in 2015 and updated in 2020 
- * to change the SVG sanitizer library this module uses. 
+ * to change the SVG sanitizer library this module uses. Additional updates
+ * were also made in 2021. 
  *
  * @property int|bool $removeRemoteReferences
  * @property int|bool $minify
