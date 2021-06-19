@@ -1,0 +1,8 @@
+{
+  "name": "ryancramerdesign/file-validator-svg-sanitizer",
+  "license": "MIT",
+  "type": "pw-module",
+  "require": {
+    "wireframe-framework/processwire-composer-installer": "^1.0.0"
+  }
+}
