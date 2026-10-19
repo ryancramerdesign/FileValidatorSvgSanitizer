@@ -1,0 +1,12 @@
+{
+	"name": "ryancramerdesign/file-validator-svg-sanitizer",
+	"description": "ProcessWire module that validates and sanitizes uploaded SVG files",
+	"type": "pw-module",
+	"license": "MIT",
+	"require": {
+		"php": ">=7.1",
+		"ext-dom": "*",
+		"ext-libxml": "*",
+		"enshrined/svg-sanitize": ">=0.14 <2.0"
+	}
+}

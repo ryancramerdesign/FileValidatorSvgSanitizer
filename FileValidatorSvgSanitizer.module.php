@@ -6,6 +6,9 @@
  * Uses the svg-sanitizer library: 
  * https://github.com/darylldoyle/svg-sanitizer 
  * 
+ * If the library is installed with Composer (enshrined/svg-sanitize), that
+ * version is used, otherwise the version bundled in /svgSanitize/ is used.
+ * 
  * The FileValidatorModule interface and this module file are MIT licensed,
  * while the svg-sanitizer library in the /svgSanitize/ dir is GPL 2.0.
  * As a result, if your installation does not support GPL code, you should
@@ -28,7 +31,7 @@ class FileValidatorSvgSanitizer extends FileValidatorModule {
 		return array(
 			'title' => 'SVG File Sanitizer/Validator',
 			'summary' => 'Validates and/or sanitizes uploaded SVG files.', 
-			'version' => 5, 
+			'version' => 6, 
 			'author' => 'Adrian and Ryan',
 			'autoload' => false, 
 			'singular' => false, 
@@ -42,6 +45,14 @@ class FileValidatorSvgSanitizer extends FileValidatorModule {
 	 *
 	 */
 	protected $svgSanitizer = null;
+
+	/**
+	 * Where the svg-sanitizer library was loaded from: 'composer', 'bundled' or '' if not yet loaded
+	 * 
+	 * @var string
+	 * 
+	 */
+	protected $librarySource = '';
 
 	/**
 	 * Construct
@@ -63,6 +74,53 @@ class FileValidatorSvgSanitizer extends FileValidatorModule {
 	}
 
 	/**
+	 * Load the svg-sanitizer library, preferring a Composer-installed version
+	 * 
+	 * Uses the first of these that is available:
+	 * 
+	 * 1. A version already autoloadable, i.e. `composer require enshrined/svg-sanitize`
+	 *    in the site root (ProcessWire's index.php loads /vendor/autoload.php).
+	 * 2. A version installed with Composer in this module's own /vendor/ dir.
+	 * 3. The version bundled with this module in the /svgSanitize/ dir.
+	 * 
+	 * @return string Either 'composer' or 'bundled'
+	 * 
+	 */
+	public function loadSvgSanitizerLibrary() {
+		if($this->librarySource) return $this->librarySource;
+		$className = 'enshrined\svgSanitize\Sanitizer';
+		$autoloader = __DIR__ . '/vendor/autoload.php';
+		if(class_exists($className)) {
+			$this->librarySource = 'composer';
+		} else if(is_file($autoloader)) {
+			require_once($autoloader);
+			if(class_exists($className)) $this->librarySource = 'composer';
+		}
+		if(!$this->librarySource) {
+			$ns = 'enshrined\svgSanitize';
+			$classLoader = $this->wire()->classLoader;
+			if(!$classLoader->hasNamespace($ns)) $classLoader->addNamespace($ns, __DIR__ . '/svgSanitize/');
+			$this->librarySource = 'bundled';
+		}
+		return $this->librarySource;
+	}
+
+	/**
+	 * Get info about the svg-sanitizer library in use
+	 * 
+	 * @return array With 'source' ('composer' or 'bundled') and 'path' (dir of Sanitizer.php)
+	 * 
+	 */
+	public function getSvgSanitizerLibraryInfo() {
+		$source = $this->loadSvgSanitizerLibrary();
+		$class = new \ReflectionClass('enshrined\svgSanitize\Sanitizer');
+		return array(
+			'source' => $source,
+			'path' => dirname($class->getFileName()) . '/',
+		);
+	}
+
+	/**
 	 * Get the SVG Sanitizer instance
 	 *
 	 * @return \enshrined\svgSanitize\Sanitizer
@@ -70,10 +128,8 @@ class FileValidatorSvgSanitizer extends FileValidatorModule {
 	 */
 	public function getSvgSanitizer() {
 		if($this->svgSanitizer !== null) return $this->svgSanitizer;
-		$ns = 'enshrined\svgSanitize';
-		$classLoader = $this->wire()->classLoader;
-		if(!$classLoader->hasNamespace($ns)) $classLoader->addNamespace($ns, __DIR__ . '/svgSanitize/');
-		$className = $ns . '\Sanitizer';
+		$this->loadSvgSanitizerLibrary();
+		$className = 'enshrined\svgSanitize\Sanitizer';
 		$this->svgSanitizer = new $className();
 		$this->svgSanitizer->removeRemoteReferences((bool) $this->removeRemoteReferences);
 		$this->svgSanitizer->minify((bool) $this->minify);
@@ -157,6 +213,7 @@ class FileValidatorSvgSanitizer extends FileValidatorModule {
 	 *
 	 */
 	public function getDefaultWhitelist() {
+		$this->loadSvgSanitizerLibrary();
 		return array(
 			'tags' => \enshrined\svgSanitize\data\AllowedTags::getTags(),
 			'attributes' => \enshrined\svgSanitize\data\AllowedAttributes::getAttributes(),

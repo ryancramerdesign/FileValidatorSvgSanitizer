@@ -41,6 +41,26 @@ at: <https://github.com/darylldoyle/svg-sanitizer>
 3. Click “Install” for module “SVG File Sanitizer/Validator”. 
 
 
+## Using a Composer-installed svg-sanitizer library
+
+The module bundles a copy of the svg-sanitizer library in its `/svgSanitize/` dir,
+but it will use a Composer-installed version instead when one is available, so you
+can keep the library up-to-date independently of this module. It checks, in order:
+
+1. A version already autoloadable, such as one installed in your site root with
+   `composer require enshrined/svg-sanitize` (ProcessWire's `index.php` loads
+   `/vendor/autoload.php` automatically).
+2. A version installed in this module's directory by running `composer install`
+   there (loaded from the module's own `/vendor/autoload.php`).
+3. The bundled version in `/svgSanitize/`.
+
+To see which one is in use:
+~~~~~
+$validator = $modules->get('FileValidatorSvgSanitizer');
+print_r($validator->getSvgSanitizerLibraryInfo()); // ['source' => 'composer|bundled', 'path' => '...']
+~~~~~
+
+
 ## Upgrade
 
 To upgrade the module, remove your old FileValidatorSvgSanitizer directory

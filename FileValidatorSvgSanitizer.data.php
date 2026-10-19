@@ -15,14 +15,13 @@ class FileValidatorSvgSanitizerData {
 	}
 	public static function process(array $data) {
 		foreach(self::$data as $line) {
-			if(strpos($line, '-') === 0) { // remove
-				$key = array_search(trim($line, '- '), $data);
-				if($key !== false) unset($data[$key]);
+			if(strpos($line, '-') === 0) { // remove (all occurrences, as lists may contain duplicates)
+				foreach(array_keys($data, trim($line, '- ')) as $key) unset($data[$key]);
 			} else { // add
 				$data[] = ltrim($line, '+ ');
 			}
 		}
-		return $data;
+		return array_values($data);
 	}
 }
 
