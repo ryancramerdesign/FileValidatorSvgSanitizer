@@ -1,8 +1,8 @@
 # svg-sanitizer
 
-[![Build Status](https://travis-ci.org/darylldoyle/svg-sanitizer.svg?branch=master)](https://travis-ci.org/darylldoyle/svg-sanitizer) [![Test Coverage](https://codeclimate.com/github/darylldoyle/svg-sanitizer/badges/coverage.svg)](https://codeclimate.com/github/darylldoyle/svg-sanitizer/coverage)
+[![Build Status](https://github.com/darylldoyle/svg-sanitizer/actions/workflows/tests.yml/badge.svg?branch=master)](https://github.com/darylldoyle/svg-sanitizer/actions/workflows/tests.yml) [![Code Coverage](https://qlty.sh/gh/darylldoyle/projects/svg-sanitizer/coverage.svg)](https://qlty.sh/gh/darylldoyle/projects/svg-sanitizer)
 
-This is my attempt at building a decent SVG sanitizer in PHP. The work is laregely borrowed from [DOMPurify](https://github.com/cure53/DOMPurify).
+This is my attempt at building a decent SVG sanitizer in PHP. The work is largely borrowed from [DOMPurify](https://github.com/cure53/DOMPurify).
 
 ## Installation
 
@@ -34,19 +34,34 @@ $cleanSVG = $sanitizer->sanitize($dirtySVG);
 
 This will either return a sanitized SVG/XML string or boolean `false` if XML parsing failed (usually due to a badly formatted file).
 
+It also returns `false` for input it will not hand to the XML parser:
+
+- an element with more than 4,096 attributes
+- an internal DTD in UTF-16 or UTF-32 input
+- an encoding whose markup is not plain ASCII, such as EBCDIC or UTF-7
+- an `<svg>` root in a namespace other than SVG
+
+`getXmlIssues()` says why.
+
 ## Options
 
 You may pass your own whitelist of tags and attributes by using the `Sanitizer::setAllowedTags` and `Sanitizer::setAllowedAttrs` methods respectively.
 
 These methods require that you implement the `enshrined\svgSanitize\data\TagInterface` or `enshrined\svgSanitize\data\AttributeInterface`.
 
-## Remove remote references 
+`<use>` is allowed by default, behind limits on how far references can expand (`useThreshold()`) and nest (`setUseNestingLimit()`). If you don't need it, for example because you inline untrusted SVG into your pages, leave `use` out of your tag allowlist to remove that whole area.
+
+## Remove remote references
 
 You have the option to remove attributes that reference remote files, this will stop HTTP leaks but will add an overhead to the sanitizer.
 
 This defaults to false, set to true to remove references.
 
 `$sanitizer->removeRemoteReferences(true);`
+
+When enabled, remote references are also stripped from CSS inside `<style>` elements and from CSS in attributes (`url()`, `@import`, `image-set()`, and quoted strings that start with a remote URL). `srcset` attributes are removed entirely, because they hold a list of URLs. This CSS handling is best-effort: it is not a full CSS parser. Treat it as defence-in-depth rather than a guarantee, and isolate untrusted CSS at the point where the SVG is embedded.
+
+Note: if a `<style>` element or `style` attribute contains a remote reference that gets stripped, any CSS escape sequences in that same block are normalised (decoded) in the output. This is semantically identical CSS but will rewrite escapes an author wrote by hand.
 
 ## Viewing Sanitization Issues
 
@@ -55,6 +70,8 @@ You may use the `getXmlIssues()` method to return an array of issues that occurr
 This may be useful for logging or providing feedback to the user on why an SVG was refused.
 
 `$issues = $sanitizer->getXmlIssues();`
+
+The list holds up to 1,000 issues. If there are more, the last entry says how many were left out.
 
 ## Minification
 
@@ -73,7 +90,8 @@ I've just released a WordPress plugin containing this code so you can sanitize y
 
 ## TYPO3
 
-An integration for TYPO3 CMS of this library is available as composer package `t3g/svg-sanitizer` at [https://github.com/TYPO3GmbH/svg_sanitizer](https://github.com/TYPO3GmbH/svg_sanitizer)
+This SVG sanitizer library is used per default in the core of TYPO3 v9 and later versions.
+See [corresponding changelog entry](https://docs.typo3.org/c/typo3/cms-core/main/en-us/Changelog/9.5.x/Important-94492-IntroduceSVGSanitizer.html) for more details.
 
 ## Tests
 

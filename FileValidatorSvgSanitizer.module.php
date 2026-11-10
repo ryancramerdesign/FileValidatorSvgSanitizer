@@ -28,7 +28,7 @@ class FileValidatorSvgSanitizer extends FileValidatorModule {
 		return array(
 			'title' => 'SVG File Sanitizer/Validator',
 			'summary' => 'Validates and/or sanitizes uploaded SVG files.', 
-			'version' => 5, 
+			'version' => 6, 
 			'author' => 'Adrian and Ryan',
 			'autoload' => false, 
 			'singular' => false, 
